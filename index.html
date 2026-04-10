@@ -120,7 +120,7 @@
       transition: border-color .2s, background .2s;
     }
     .dropzone:hover, .dropzone.over { border-color: var(--primary); background: #f0f9ff; }
-    .dropzone input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    .dropzone input { display: none; }
     .dz-icon  { font-size: 28px; margin-bottom: 8px; }
     .dz-label { color: var(--muted); font-size: 12px; }
     .dz-label strong { color: var(--primary); }
@@ -515,10 +515,12 @@ function stopReview() {
 //  드래그앤드롭 / 파일 선택
 // ══════════════════════════════════════════════
 const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('over'); });
 dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('over'));
 dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
-document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
 
 async function handleFile(file) {
   if (!file.name.toLowerCase().endsWith('.docx')) { alert('.docx 파일만 지원합니다.'); return; }
