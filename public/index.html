@@ -539,6 +539,24 @@ dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('over'))
 dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
 fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
 
+// JSZip fallback: .docx의 word/document.xml에서 직접 텍스트 추출
+async function extractTextViaJSZip(arrayBuffer) {
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const docXml = await zip.file('word/document.xml').async('string');
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(docXml, 'application/xml');
+  const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const paragraphs = doc.getElementsByTagNameNS(ns, 'p');
+  const lines = [];
+  for (const p of paragraphs) {
+    const runs = p.getElementsByTagNameNS(ns, 't');
+    let line = '';
+    for (const r of runs) line += r.textContent;
+    if (line.trim()) lines.push(line.trim());
+  }
+  return lines.join('\n');
+}
+
 async function handleFile(file) {
   if (!file.name.toLowerCase().endsWith('.docx')) { alert('.docx 파일만 지원합니다.'); return; }
   uploadedFileName = file.name.replace(/\.docx$/i, '');
@@ -552,8 +570,21 @@ async function handleFile(file) {
   document.getElementById('reviewBtn').disabled = true;
 
   try {
-    const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
-    segments = buildSegments(result.value);
+    const buf = await file.arrayBuffer();
+
+    // 1차: mammoth 시도
+    let text = '';
+    try {
+      const result = await mammoth.extractRawText({ arrayBuffer: buf.slice(0) });
+      text = result.value || '';
+    } catch (_) {}
+
+    // 2차: mammoth 실패 시 JSZip으로 직접 추출
+    if (!text.trim()) {
+      text = await extractTextViaJSZip(buf);
+    }
+
+    segments = buildSegments(text);
     renderPreview(segments);
     if (segments.length > 0) {
       document.getElementById('reviewBtn').disabled = false;
