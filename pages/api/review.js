@@ -1,4 +1,4 @@
-// Vercel Edge Function — OpenAI 스트리밍 프록시
+// Vercel Edge Function — Anthropic 스트리밍 프록시
 // 프롬프트는 lib/prompt.js에서 관리, API 키는 환경변수로만 처리
 import { SYSTEM_PROMPT } from '../../lib/prompt.js';
 
@@ -15,7 +15,7 @@ export default async function handler(req) {
     return new Response('Method Not Allowed', { status: 405 });
   }
 
-  const MODEL = 'gpt-5.2';
+  const MODEL = 'claude-sonnet-4-6';
   let userText = '';
   try {
     const body = await req.json();
@@ -24,34 +24,35 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // ping 또는 빈 입력 → OpenAI 호출 없이 즉시 응답
+  // ping 또는 빈 입력 → API 호출 없이 즉시 응답
   if (!userText) {
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'OPENAI_API_KEY 환경변수가 설정되지 않았습니다.' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const openAIBody = {
+  const anthropicBody = {
     model: MODEL,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user',   content: userText },
-    ],
-    max_completion_tokens: 16000,
+    max_tokens: 16000,
     temperature: 0,
+    system: SYSTEM_PROMPT,
+    messages: [
+      { role: 'user', content: userText },
+    ],
     stream: true,
   };
 
-  const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
+  const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify(openAIBody),
+    body: JSON.stringify(anthropicBody),
   });
 
   if (!upstream.ok) {
@@ -59,7 +60,7 @@ export default async function handler(req) {
     return new Response(errText, { status: upstream.status, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // 스트리밍: OpenAI SSE를 그대로 클라이언트로 전달
+  // 스트리밍: Anthropic SSE를 그대로 클라이언트로 전달
   return new Response(upstream.body, {
     headers: {
       'Content-Type': 'text/event-stream',

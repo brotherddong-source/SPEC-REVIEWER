@@ -758,7 +758,7 @@ async function callAPI(userText, onUpdate) {
 
   if (!(resp.headers.get('Content-Type') || '').includes('text/event-stream')) {
     const data = await resp.json();
-    const text = data.choices?.[0]?.message?.content || '';
+    const text = data.content?.[0]?.text || '';
     onUpdate(text);
     return text;
   }
@@ -778,11 +778,12 @@ async function callAPI(userText, onUpdate) {
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue;
       const chunk = line.slice(6).trim();
-      if (chunk === '[DONE]') continue;
       try {
-        const delta = JSON.parse(chunk).choices?.[0]?.delta?.content ?? '';
-        full += delta;
-        onUpdate(full);
+        const parsed = JSON.parse(chunk);
+        if (parsed.type === 'content_block_delta') {
+          full += parsed.delta?.text ?? '';
+          onUpdate(full);
+        }
       } catch {}
     }
   }
