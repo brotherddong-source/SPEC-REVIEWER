@@ -548,9 +548,11 @@ function readAsArrayBuffer(file) {
   });
 }
 
-// JSZip fallback: .docx의 word/document.xml에서 직접 텍스트 추출
+// JSZip fallback: .docx에서 텍스트 추출 (w:t 태그 또는 altChunk HTML)
 async function extractTextViaJSZip(arrayBuffer) {
   const zip = await JSZip.loadAsync(arrayBuffer);
+
+  // 1) 일반 docx: word/document.xml의 w:t 태그에서 추출
   const docXml = await zip.file('word/document.xml').async('string');
   const parser = new DOMParser();
   const doc = parser.parseFromString(docXml, 'application/xml');
@@ -563,7 +565,28 @@ async function extractTextViaJSZip(arrayBuffer) {
     for (const r of runs) line += r.textContent;
     if (line.trim()) lines.push(line.trim());
   }
-  return lines.join('\n');
+  if (lines.length > 0) return lines.join('\n');
+
+  // 2) altChunk 방식: word/afchunk.mht 또는 유사 HTML 청크에서 추출
+  for (const fileName of Object.keys(zip.files)) {
+    if (/^word\/.*\.(mht|html?)$/i.test(fileName)) {
+      let content = await zip.file(fileName).async('string');
+      // MHT인 경우 quoted-printable 디코딩: =XX → 문자, =\n → 줄이음
+      if (fileName.endsWith('.mht')) {
+        const htmlMatch = content.match(/Content-Type:\s*text\/html[\s\S]*?\n\n([\s\S]+?)(?:\n------=|$)/i);
+        if (htmlMatch) content = htmlMatch[1];
+        content = content.replace(/=\r?\n/g, '').replace(/=([0-9A-Fa-f]{2})/g,
+          (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+      }
+      // HTML에서 텍스트 추출
+      const tmp = document.createElement('div');
+      tmp.innerHTML = content;
+      const textContent = tmp.innerText || tmp.textContent || '';
+      if (textContent.trim().length > 0) return textContent.trim();
+    }
+  }
+
+  return '';
 }
 
 async function handleFile(file) {
