@@ -554,8 +554,12 @@ async function handleFile(file) {
     const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
     segments = buildSegments(result.value);
     renderPreview(segments);
-    document.getElementById('reviewBtn').disabled = false;
-    document.getElementById('claimCheckBtn').disabled = false;
+    if (segments.length > 0) {
+      document.getElementById('reviewBtn').disabled = false;
+      document.getElementById('claimCheckBtn').disabled = false;
+    } else {
+      document.getElementById('segList').innerHTML = '<div class="msg-error">텍스트를 추출할 수 없습니다. 문서 형식을 확인해주세요.</div>';
+    }
   } catch (err) {
     document.getElementById('segList').innerHTML = `<div class="msg-error">파싱 오류: ${esc(err.message)}</div>`;
   }
